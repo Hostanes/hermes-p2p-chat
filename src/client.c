@@ -120,19 +120,10 @@ void *accept_connections(void *arg) {
     if (packet.type == CONNECT_REQUEST) {
       printf("Connection request received from %s\n", packet.content);
 
-      printf("Do you want to accept the connection? (y/n): ");
-      char response;
-      scanf(" %c", &response);
-
       packet_core_t response_packet;
-      if (response == 'y') {
-        response_packet.type = CONNECT_ACCEPT;
-        strcpy(response_packet.content, "Connection accepted");
-      } else {
-        response_packet.type = CONNECT_REJECT;
-        strcpy(response_packet.content, "Connection rejected");
-      }
 
+      response_packet.type = CONNECT_ACCEPT;
+      strcpy(response_packet.content, "Connection accepted");
       // Send response
       if (send(new_socket, &response_packet, sizeof(response_packet), 0) < 0) {
         perror("Send failed");
@@ -140,20 +131,17 @@ void *accept_connections(void *arg) {
         continue;
       }
 
-      if (response == 'y') {
-        // Wait for final confirmation
-        if (recv(new_socket, &packet, sizeof(packet), 0) < 0) {
-          perror("Receive failed");
-          close(new_socket);
-          continue;
-        }
+      if (recv(new_socket, &packet, sizeof(packet), 0) < 0) {
+        perror("Receive failed");
+        close(new_socket);
+        continue;
+      }
 
-        if (packet.type == CONNECT_CONFIRM) {
-          // Add user to list
-          users[user_count] = create_User(address, new_socket);
-          user_count++;
-          printf("User added to list\n");
-        }
+      if (packet.type == CONNECT_CONFIRM) {
+        // Add user to list
+        users[user_count] = create_User(address, new_socket);
+        user_count++;
+        printf("User added to list\n");
       }
     }
 
