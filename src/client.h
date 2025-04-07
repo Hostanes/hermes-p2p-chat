@@ -1,35 +1,47 @@
 
-#ifndef SERVER_LOGIC_H
-#define SERVER_LOGIC_H
-
 #include <arpa/inet.h>
-#include <openssl/err.h>
-#include <openssl/pem.h>
-#include <openssl/rsa.h>
+#include <ncurses.h>
+#include <netinet/in.h>
+#include <openssl/evp.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
-#define MAX_CLIENTS 10
-#define READ_BUFFER_SIZE 1024
-#define WRITE_BUFFER_SIZE 1024
+#define MAX_USERS 10
+#define MAX_ROOMS 10
+#define MAX_MSG_LEN 1024
+#define JOIN_TIMEOUT 5
+#define MAX_RETRIES 3
 
-// Message types definitions
-#define LEAVE 'l'
-#define JOIN 'j'
-#define TEXT 't'
-#define CONNECT_REQUEST 'c'
-#define CONNECT_ACCEPT 'a'
-#define CONNECT_REJECT 'r'
-#define CONNECT_CONFIRM 'f'
+typedef enum {
+  MSG_JOIN_REQUEST,
+  MSG_JOIN_ACCEPT,
+  MSG_CHAT,
+  MSG_PING,
+  MSG_REJECT
+} message_type_t;
+
+typedef struct {
+  message_type_t type;
+  char sender_name[25];
+  union {
+    struct {
+      int requested_user_id;
+    } join;
+    struct {
+      char text[MAX_MSG_LEN - 50];
+    } chat;
+  } data;
+} message_t;
 
 typedef struct {
   int user_id;
   char nametag[25];
-  RSA *pub_key;
+  EVP_PKEY *pub_key;
   struct sockaddr_in addr;
   int sockfd;
 } user_t;
@@ -38,30 +50,25 @@ typedef struct {
   int room_id;
   char room_name[25];
   user_t *leader;
-  user_t *members[10];
+  user_t *members[2];
 } room_t;
 
 typedef struct {
-  char type;
-  char content[256];
-  int length;
-} packet_core_t;
+  user_t users[MAX_USERS];
+  room_t rooms[MAX_ROOMS];
+  int user_count;
+  int room_count;
+  int sockfd;
+  int port;
+  char local_name[25];
+  int local_user_id;
+  WINDOW *chat_win;
+  WINDOW *input_win;
+} app_state_t;
 
-// Global variables
-extern room_t *rooms[4];
-extern int room_count;
-extern user_t *users[MAX_CLIENTS];
-extern int user_count;
-extern int server_fd;
-extern int current_port;
-
-// Function declarations
-user_t *create_User(struct sockaddr_in addr, int sockfd);
-void accept_Connection(packet_core_t packet, int new_socket,
-                       struct sockaddr_in address);
-void print_Text(packet_core_t *packet);
-void *receiver_thread(void *arg);
-int request_Connection(const char *peer_ip, int target_port);
-void send_packet(int sockfd, packet_core_t *packet);
-
-#endif // SERVER_LOGIC_H
+typedef struct {
+  app_state_t *state;
+  int user_id;
+  int retries;
+  struct sockaddr_in dest_addr;
+} join_timeout_args_t;
